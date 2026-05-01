@@ -134,6 +134,13 @@ func fakeServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		// In-process httptest round-trips on a fast machine can complete
+		// in well under a microsecond; on Windows runners that's below
+		// the time.Now() resolution and the measured RTT rounds to 0
+		// ms, making TestRunEndToEnd flaky. Force a small floor so the
+		// measurement is always meaningful regardless of clock
+		// resolution.
+		time.Sleep(time.Millisecond)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
