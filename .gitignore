@@ -1,0 +1,17 @@
+# Binaries
+/gospeedtest
+/dist/
+*.exe
+
+# Go build cache / vendor
+/vendor/
+
+# Test artifacts
+*.test
+*.out
+coverage.*
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

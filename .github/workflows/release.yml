@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+    env:
+      GOOS:        ${{ matrix.goos }}
+      GOARCH:      ${{ matrix.goarch }}
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: build binary
+        run: |
+          mkdir -p dist
+          OUT="dist/gospeedtest_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}${{ matrix.ext }}"
+          go build \
+            -trimpath \
+            -ldflags "-s -w -X main.versionTag=${GITHUB_REF_NAME}" \
+            -o "$OUT" \
+            ./cmd/gospeedtest
+
+      - name: package archive
+        run: |
+          set -euo pipefail
+          cd dist
+          BIN="gospeedtest_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}${{ matrix.ext }}"
+          STAGE="stage_${GOOS}_${GOARCH}"
+          mkdir -p "$STAGE"
+          cp "$BIN" "$STAGE/gospeedtest${{ matrix.ext }}"
+          cp ../README.md ../LICENSE "$STAGE/"
+          if [ "${GOOS}" = "windows" ]; then
+            (cd "$STAGE" && zip -r "../gospeedtest_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}.zip" .)
+          else
+            tar -C "$STAGE" -czf "gospeedtest_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}.tar.gz" .
+          fi
+          rm -rf "$STAGE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/gospeedtest_*.tar.gz
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}_zip
+          path: dist/gospeedtest_*.zip
+          if-no-files-found: ignore
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: list artifacts
+        run: ls -lah artifacts
+
+      - name: compute checksums
+        working-directory: artifacts
+        run: |
+          shasum -a 256 gospeedtest_* > checksums.txt
+          cat checksums.txt
+
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/gospeedtest_*.tar.gz
+            artifacts/gospeedtest_*.zip
+            artifacts/checksums.txt
+          generate_release_notes: true

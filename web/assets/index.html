@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gospeedtest</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='28' fill='%230f1116' stroke='%2300d4ff' stroke-width='3'/><path d='M32 32 L48 24' stroke='%2300d4ff' stroke-width='3' stroke-linecap='round'/></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">go</span><span class="brand-name">speedtest</span>
+    </div>
+    <div class="server-info">
+      <span id="server-host">—</span>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="gauge-wrap">
+      <svg class="gauge" viewBox="0 0 400 400" aria-hidden="true">
+        <!-- Outer track -->
+        <defs>
+          <linearGradient id="arc-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"  stop-color="#00d4ff"/>
+            <stop offset="50%" stop-color="#7c5cff"/>
+            <stop offset="100%" stop-color="#ff4d8d"/>
+          </linearGradient>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <!-- Static arc background -->
+        <path class="arc-bg"
+              d="M 60 300 A 160 160 0 1 1 340 300"
+              fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="22"
+              stroke-linecap="round"/>
+
+        <!-- Animated arc -->
+        <path id="arc-fg" class="arc-fg"
+              d="M 60 300 A 160 160 0 1 1 340 300"
+              fill="none" stroke="url(#arc-grad)" stroke-width="22"
+              stroke-linecap="round"
+              stroke-dasharray="754" stroke-dashoffset="754"
+              filter="url(#glow)"/>
+
+        <!-- Tick marks -->
+        <g id="ticks" class="ticks"></g>
+
+        <!-- Needle -->
+        <g id="needle" class="needle" transform="rotate(-135 200 200)">
+          <line x1="200" y1="200" x2="200" y2="80"
+                stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="200" cy="200" r="8" fill="#fff"/>
+        </g>
+      </svg>
+
+      <!-- Center readout -->
+      <div class="readout">
+        <div class="phase-label" id="phase-label">Ready</div>
+        <div class="value" id="value">0.00</div>
+        <div class="unit">Mbps</div>
+      </div>
+
+      <!-- GO button -->
+      <button id="go" class="go-btn" type="button" aria-label="Start speed test">
+        <span class="go-text">GO</span>
+        <span class="go-ring"></span>
+      </button>
+    </section>
+
+    <section class="results">
+      <div class="result" data-phase="ping">
+        <div class="result-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="result-body">
+          <div class="result-label">Ping</div>
+          <div class="result-value"><span id="ping-value">—</span><span class="result-unit">ms</span></div>
+          <div class="result-sub">jitter <span id="jitter-value">—</span> ms</div>
+        </div>
+      </div>
+      <div class="result" data-phase="download">
+        <div class="result-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="result-body">
+          <div class="result-label">Download</div>
+          <div class="result-value"><span id="download-value">—</span><span class="result-unit">Mbps</span></div>
+          <div class="result-sub"><span id="download-bytes">—</span></div>
+        </div>
+      </div>
+      <div class="result" data-phase="upload">
+        <div class="result-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 20V8m0 0l-5 5m5-5l5 5M5 4h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="result-body">
+          <div class="result-label">Upload</div>
+          <div class="result-value"><span id="upload-value">—</span><span class="result-unit">Mbps</span></div>
+          <div class="result-sub"><span id="upload-bytes">—</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="info">
+      <div class="info-row"><span class="info-key">IP</span><span class="info-val" id="info-ip">—</span></div>
+      <div class="info-row"><span class="info-key">ISP</span><span class="info-val" id="info-isp">—</span></div>
+      <div class="info-row"><span class="info-key">Location</span><span class="info-val" id="info-loc">—</span></div>
+      <div class="info-row"><span class="info-key">Server</span><span class="info-val" id="info-server">—</span></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <a href="https://github.com/pcamminadi/gospeedtest" target="_blank" rel="noopener">github.com/pcamminadi/gospeedtest</a>
+    · MIT licensed
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
