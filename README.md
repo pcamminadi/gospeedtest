@@ -92,3 +92,7 @@ web/               index.html, app.js, style.css (embedded via go:embed)
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+**Built with [Claude Code](https://claude.com/claude-code).**
