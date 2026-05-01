@@ -1,0 +1,20 @@
+# Build outputs and caches
+/gospeedtest
+/dist/
+/site/
+*.exe
+/vendor/
+
+# VCS / IDE / OS
+.git/
+.github/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Tests / docs that don't affect the build
+/docs/
+/mkdocs.yml
+TODO.md
+security-findings.md

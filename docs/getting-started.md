@@ -32,6 +32,33 @@ cd gospeedtest
 go build ./cmd/gospeedtest
 ```
 
+### Docker
+
+The repo ships a multi-stage `Dockerfile` with a `scratch` final image
+(~ 8 MB, statically linked, zero runtime dependencies).
+
+```sh
+# Build locally
+docker build -t gospeedtest .
+
+# Run the server on :8080
+docker run --rm -p 8080:8080 gospeedtest
+
+# …or pin a version when one's pushed to a registry
+docker run --rm -p 8080:8080 ghcr.io/pcamminadi/gospeedtest:v0.1.0
+
+# Pass flags through after the image name
+docker run --rm -p 9000:9000 gospeedtest server --addr :9000
+
+# Run the CLI in a one-off container
+docker run --rm gospeedtest cli --server http://host.docker.internal:8080 --json
+```
+
+The image bundles `ca-certificates` so the server's `/api/info`
+outbound HTTPS lookup to ipinfo.io can verify the certificate; the
+binary itself is built with `CGO_ENABLED=0` and the same
+`-trimpath -ldflags "-s -w"` as the release tarballs.
+
 ## Quick start
 
 Start a server on port 8080 in one terminal:

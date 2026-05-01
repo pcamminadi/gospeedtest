@@ -33,10 +33,18 @@ same binary ships a CLI mode that runs the test from a terminal.
 ## Quick start
 
 Pre-built binaries for every release at
-[Releases](https://github.com/pcamminadi/gospeedtest/releases/latest), or:
+[Releases](https://github.com/pcamminadi/gospeedtest/releases/latest)
+(both raw binaries and `tar.gz` / `zip` archives), or:
 
 ```sh
 go install github.com/pcamminadi/gospeedtest/cmd/gospeedtest@latest
+```
+
+…or run the server in Docker (~ 8 MB image, scratch base):
+
+```sh
+docker build -t gospeedtest .
+docker run --rm -p 8080:8080 gospeedtest
 ```
 
 Then:
