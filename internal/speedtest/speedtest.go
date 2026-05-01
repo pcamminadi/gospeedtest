@@ -152,7 +152,7 @@ func runPing(ctx context.Context, cfg Config, onSample func(Sample)) (avgMs, jit
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
-		ms := float64(time.Since(t0).Microseconds()) / 1000.0
+		ms := time.Since(t0).Seconds() * 1000.0
 		samples = append(samples, ms)
 		onSample(Sample{
 			Phase:   PhasePing,
