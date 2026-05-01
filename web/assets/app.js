@@ -337,23 +337,17 @@
       payload.copyWithin(off, 0, Math.min(65536, payload.length - off));
     }
 
+    // Use XHR (not fetch) for uploads so we can read XMLHttpRequestUpload
+    // progress events. fetch() resolves only when the request *completes*,
+    // so with 25 MiB chunks the gauge would sit at 0 for several seconds
+    // before jumping when the first chunk lands. xhr.upload.onprogress
+    // fires every ~50–100 ms with the cumulative bytes sent on the wire,
+    // which gives us a smooth live line at any link speed.
     const workers = [];
     for (let i = 0; i < CFG.streams; i++) {
       workers.push((async () => {
         while (performance.now() - start < CFG.testDuration && !ctrl.signal.aborted) {
-          // Note: fetch upload-progress isn't reliably available cross-browser, so
-          // we count bytes per completed request. With multiple concurrent streams
-          // and sub-second chunks this still produces a smooth Mbps line.
-          try {
-            await fetch("/upload", {
-              method: "POST",
-              cache: "no-store",
-              body: payload,
-              signal: ctrl.signal,
-              headers: { "Content-Type": "application/octet-stream" },
-            });
-            bytes += payload.byteLength;
-          } catch (e) { return; }
+          await uploadOne(payload, ctrl.signal, (delta) => { bytes += delta; });
         }
       })());
     }
@@ -391,6 +385,40 @@
   }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // uploadOne POSTs `payload` to /upload and resolves when the request
+  // finishes (success, error, or abort). It calls `onProgress(delta)` with
+  // the bytes-uploaded delta as the browser sends them — typically every
+  // 50–100 ms — so callers can update a live counter without waiting for
+  // the whole request to finish. Honors AbortSignal by aborting the XHR.
+  function uploadOne(payload, signal, onProgress) {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      let lastLoaded = 0;
+      xhr.open("POST", "/upload", true);
+      xhr.setRequestHeader("Content-Type", "application/octet-stream");
+
+      xhr.upload.onprogress = (ev) => {
+        if (!ev.lengthComputable) return;
+        const delta = ev.loaded - lastLoaded;
+        lastLoaded = ev.loaded;
+        if (delta > 0) onProgress(delta);
+      };
+
+      const onAbort = () => { try { xhr.abort(); } catch (_) {} };
+      const finish = () => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      };
+      xhr.onload = finish;
+      xhr.onerror = finish;
+      xhr.onabort = finish;
+      xhr.ontimeout = finish;
+
+      signal.addEventListener("abort", onAbort);
+      xhr.send(payload);
+    });
+  }
 
   // How long to hold each phase's final number on the gauge before the
   // next phase starts — gives the user a beat to read the result.
