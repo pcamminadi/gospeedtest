@@ -51,6 +51,11 @@ func New(cfg Config) *http.Server {
 	mux.HandleFunc("/download", handleDownload(cfg))
 	mux.HandleFunc("/upload", handleUpload(cfg))
 	mux.HandleFunc("/api/info", handleInfo(cfg))
+	// /ws is the server-driven ping endpoint. The browser uses it
+	// because WebSocket Ping/Pong control frames are processed by the
+	// browser's network process without involving the JS event loop —
+	// so the server can measure wire RTT accurately even on loopback.
+	mux.HandleFunc("/ws", handleWS)
 	mux.Handle("/", web.FileServer())
 
 	return &http.Server{

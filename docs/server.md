@@ -19,6 +19,18 @@ The server registers the protocol endpoints (described in
 [How the test works](protocol.md)) plus serves the embedded web UI
 (`index.html`, `style.css`, `app.js`, etc.) from `/`.
 
+### `/ws` — WebSocket ping (browser-only)
+
+The browser UI upgrades to a WebSocket on this path. The server then
+drives a ping loop using WS Ping/Pong control frames — see
+[How the test works](protocol.md) for why this is more accurate than
+HTTP-based pinging from a browser. The CLI does not use this endpoint;
+it pings via plain HTTP `/ping` because the Go HTTP client has no IPC
+overhead.
+
+The connection is bounded to 30 s of total lifetime so a misbehaving
+client cannot pin a server goroutine indefinitely.
+
 `/api/info` returns:
 
 ```json

@@ -110,29 +110,102 @@
     }
   }
 
-  // measureOnePing performs one round-trip and returns its duration in
-  // milliseconds. We prefer the Performance Resource Timing API
-  // (responseStart - requestStart) over `performance.now()` brackets:
+  // ----------- Ping -----------
   //
-  // - performance.now() around `await fetch(...)` includes DNS lookup,
-  //   the event-loop hop, promise/microtask machinery, and (on the first
-  //   request) the TCP handshake. On a localhost box that overhead can
-  //   dwarf the actual RTT — we were seeing ~7 ms in the browser vs.
-  //   ~0.3 ms in the CLI for the same loopback path.
-  // - responseStart - requestStart is what the spec defines as the time
-  //   from the browser sending the request to the first byte of the
-  //   response arriving — i.e. wire RTT, minus JS overhead.
+  // We prefer the WebSocket /ws endpoint over HTTP /ping in the browser:
+  // the *server* measures the round-trip using WebSocket Ping/Pong
+  // control frames, which the browser's network process answers
+  // automatically without involving the JS event loop. That removes the
+  // per-request JS overhead and the timer-precision clamping that
+  // browsers apply for Spectre mitigation — server-side measurement uses
+  // Go's nanosecond-resolution monotonic clock.
   //
-  // Falls back to the wall-clock measurement if the timing entry isn't
-  // available (older browsers, blocked entries, etc.).
-  async function measureOnePing(seq) {
-    // Unique URL so the Resource Timing entry is unique and we can find
-    // it. The server ignores the query string.
+  // If WS fails (older server without /ws, blocked upgrade, proxy
+  // stripping the upgrade headers, etc.) we fall back to the HTTP
+  // approach using the Resource Timing API.
+
+  async function runPing() {
+    activeResult("ping");
+    setReadout("Ping", "0", "ms");
+    try {
+      return await runPingWS();
+    } catch (e) {
+      console.warn("WS ping unavailable, falling back to HTTP:", e.message || e);
+      return await runPingHTTP();
+    }
+  }
+
+  function runPingWS() {
+    return new Promise((resolve, reject) => {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+
+      const samples = [];
+      let settled = false;
+      const settle = (fn, val) => { if (!settled) { settled = true; fn(val); } };
+
+      // Hard ceiling so a stuck connection doesn't hang the UI.
+      const timer = setTimeout(() => {
+        try { ws.close(); } catch (_) {}
+        settle(reject, new Error("ws ping timeout"));
+      }, 15000);
+
+      ws.onmessage = (ev) => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (_) { return; }
+        if (msg.type === "ping" && typeof msg.rtt_ms === "number") {
+          samples.push(msg.rtt_ms);
+          ui.ping.textContent = msg.rtt_ms.toFixed(2);
+          setReadout("Ping", msg.rtt_ms.toFixed(2), "ms");
+          setGauge(1 - Math.min(msg.rtt_ms, 200) / 200);
+        } else if (msg.type === "done") {
+          finalize();
+        }
+      };
+
+      ws.onerror = () => {
+        // Errors fire for both connect failures and mid-stream issues.
+        // If we already collected samples, still try to use them.
+        if (samples.length === 0) {
+          clearTimeout(timer);
+          settle(reject, new Error("ws connection error"));
+        }
+      };
+
+      ws.onclose = () => {
+        clearTimeout(timer);
+        finalize();
+      };
+
+      function finalize() {
+        if (settled) return;
+        if (samples.length === 0) {
+          settle(reject, new Error("ws closed with no samples"));
+          return;
+        }
+        try { ws.close(); } catch (_) {}
+        const sorted = [...samples].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        let jitter = 0;
+        for (let i = 1; i < samples.length; i++) {
+          jitter += Math.abs(samples[i] - samples[i - 1]);
+        }
+        jitter = samples.length > 1 ? jitter / (samples.length - 1) : 0;
+        ui.ping.textContent   = median.toFixed(2);
+        ui.jitter.textContent = jitter.toFixed(2);
+        settle(resolve, { ping: median, jitter });
+      }
+    });
+  }
+
+  // measureOnePingHTTP performs one round-trip and returns its duration in
+  // milliseconds, preferring the Performance Resource Timing API over
+  // performance.now() brackets so we exclude JS scheduling overhead.
+  async function measureOnePingHTTP(seq) {
     const url = `/ping?n=${seq}_${Math.random().toString(36).slice(2, 10)}`;
     const t0 = performance.now();
     await fetch(url, { cache: "no-store" });
     const wallMs = performance.now() - t0;
-
     try {
       const fullURL = new URL(url, window.location.href).href;
       const entries = performance.getEntriesByName(fullURL);
@@ -144,38 +217,27 @@
     return wallMs;
   }
 
-  async function runPing() {
-    activeResult("ping");
-    setReadout("Ping", "0", "ms");
-
-    // Warm-up: prime the TCP/HTTP connection (and any cold caches) so the
-    // first counted sample doesn't include handshake overhead. Discarded.
+  async function runPingHTTP() {
+    // Warm-up: prime the TCP/HTTP connection so the first counted sample
+    // doesn't include handshake overhead. Discarded.
     try { await fetch("/ping", { cache: "no-store" }); } catch (_) {}
 
     const samples = [];
     for (let i = 0; i < CFG.pingSamples; i++) {
       let ms;
-      try {
-        ms = await measureOnePing(i);
-      } catch (_) {
-        continue;
-      }
+      try { ms = await measureOnePingHTTP(i); } catch (_) { continue; }
       samples.push(ms);
-      const last = ms.toFixed(2);
-      ui.ping.textContent = last;
-      setReadout("Ping", last, "ms");
-      // Gauge during ping: visualize 0..200 ms inverted (lower is faster).
+      ui.ping.textContent = ms.toFixed(2);
+      setReadout("Ping", ms.toFixed(2), "ms");
       setGauge(1 - Math.min(ms, 200) / 200);
       await sleep(50);
     }
 
-    // Don't let the resource-timing buffer accumulate ping entries forever
-    // across repeated test runs.
     if (typeof performance.clearResourceTimings === "function") {
       performance.clearResourceTimings();
     }
-
     if (samples.length === 0) throw new Error("ping failed");
+
     const sorted = [...samples].sort((a, b) => a - b);
     const median = sorted[Math.floor(sorted.length / 2)];
     let jitter = 0;
