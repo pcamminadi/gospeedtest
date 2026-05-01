@@ -50,11 +50,13 @@
         <!-- Tick marks -->
         <g id="ticks" class="ticks"></g>
 
-        <!-- Needle -->
-        <g id="needle" class="needle" transform="rotate(-135 200 200)">
-          <line x1="200" y1="200" x2="200" y2="80"
+        <!-- Needle. We rotate this group via CSS `transform` (not the SVG
+             attribute) so CSS transitions reliably interpolate between
+             positions across browsers. -->
+        <g id="needle" class="needle">
+          <line x1="200" y1="200" x2="200" y2="90"
                 stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-          <circle cx="200" cy="200" r="8" fill="#fff"/>
+          <circle cx="200" cy="200" r="9" fill="#fff"/>
         </g>
       </svg>
 
@@ -68,7 +70,6 @@
       <!-- GO button -->
       <button id="go" class="go-btn" type="button" aria-label="Start speed test">
         <span class="go-text">GO</span>
-        <span class="go-ring"></span>
       </button>
     </section>
 

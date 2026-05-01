@@ -75,19 +75,35 @@ a:hover { text-decoration: underline; }
 .ticks line.major { stroke: rgba(255,255,255,0.45); stroke-width: 2.5; }
 .ticks text { fill: var(--fg-dim); font-family: var(--mono); font-size: 13px; }
 
+/* Needle. transform-origin uses SVG user-space coordinates (the viewBox is
+   0..400) so 200px = the gauge's pivot point. We set the rotation via CSS
+   on .needle (initial state) and via inline style.transform from JS — that
+   way the CSS transition reliably interpolates between positions. */
 .needle {
-  transition: transform 180ms cubic-bezier(.2,.8,.2,1);
-  filter: drop-shadow(0 0 6px rgba(255,255,255,0.55));
   transform-origin: 200px 200px;
+  transform: rotate(-135deg);
+  transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.55));
+  will-change: transform;
 }
 
+/* Readout: lives in the lower bowl of the gauge. We use absolute
+   positioning + transform-50% so the content's vertical center sits at
+   ~62 % of the gauge-wrap's height — clear of the GO button (centered)
+   and of the bottom edge. Hidden by default; shown only while a test is
+   running (.testing on the parent) and briefly after it finishes. */
 .readout {
   position: absolute;
-  inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  left: 50%;
+  top: 62%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center;
   pointer-events: none;
-  transform: translateY(38%);
+  opacity: 0;
+  transition: opacity 220ms ease;
 }
+.gauge-wrap.testing .readout,
+.gauge-wrap.showing-result .readout { opacity: 1; }
 .phase-label {
   text-transform: uppercase; letter-spacing: 3px;
   color: var(--fg-dim); font-size: 12px; margin-bottom: 6px;
@@ -121,34 +137,23 @@ a:hover { text-decoration: underline; }
   letter-spacing: 4px;
   cursor: pointer;
   box-shadow: var(--shadow), inset 0 0 30px rgba(0,212,255,0.05);
-  transition: transform 200ms cubic-bezier(.2,.8,.2,1), box-shadow 200ms;
+  transition: transform 220ms cubic-bezier(.2,.8,.2,1),
+              box-shadow 220ms,
+              opacity   220ms ease;
 }
-.go-btn:hover { transform: translate(-50%, -50%) scale(1.04); box-shadow: var(--shadow), 0 0 30px rgba(0,212,255,0.25); }
+.go-btn:hover  { transform: translate(-50%, -50%) scale(1.04); box-shadow: var(--shadow), 0 0 30px rgba(0,212,255,0.25); }
 .go-btn:active { transform: translate(-50%, -50%) scale(0.98); }
 .go-btn:disabled { cursor: not-allowed; opacity: 0.7; }
-
 .go-text { display: block; }
-.go-ring {
-  position: absolute; inset: -8px;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
+
+/* While testing, the GO button gets out of the way entirely — the live
+   readout takes center stage and the active result card below shows the
+   current phase. The button fades back in once the test ends. */
+.go-btn.running {
   opacity: 0;
   pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.6);
 }
-.go-btn.running { background: radial-gradient(circle at 30% 30%, #2a1622, #0c0f17 70%); }
-.go-btn.running .go-text::before { content: "··"; }
-.go-btn.running .go-text { font-size: 20px; letter-spacing: 1px; }
-.go-btn.running .go-ring {
-  opacity: 1;
-  animation: ring-pulse 1.6s ease-out infinite;
-}
-@keyframes ring-pulse {
-  0%   { transform: scale(0.95); opacity: 0.7; }
-  100% { transform: scale(1.25); opacity: 0; }
-}
-
-/* When test is running, hide the GO label and shrink the button so the readout takes center stage */
-.go-btn.running { width: 96px; height: 96px; transform: translate(-50%, -50%); }
 
 /* ------------- Results ------------- */
 .results {

@@ -23,6 +23,7 @@
     needle:      $("needle"),
     arc:         $("arc-fg"),
     ticks:       $("ticks"),
+    gaugeWrap:   document.querySelector(".gauge-wrap"),
     ping:        $("ping-value"),
     jitter:      $("jitter-value"),
     download:    $("download-value"),
@@ -59,12 +60,16 @@
   }
 
   // Set the needle and arc to a fraction [0..1].
+  // We drive the needle via CSS `transform` (style property) rather than the
+  // SVG `transform` attribute — CSS transitions don't reliably interpolate
+  // SVG presentation-attribute changes across browsers, and that produced
+  // the "needle bugging through the page" symptom. CSS-side transforms
+  // animate cleanly with the .needle CSS rule.
   const ARC_LEN = 754; // matches stroke-dasharray in HTML
   function setGauge(frac) {
     const f = Math.max(0, Math.min(1, frac));
-    // Needle: -135 → +135 across the arc.
-    const deg = -135 + f * 270;
-    ui.needle.setAttribute("transform", `rotate(${deg.toFixed(2)} 200 200)`);
+    const deg = -135 + f * 270; // arc spans -135° to +135° (270° sweep)
+    ui.needle.style.transform = `rotate(${deg.toFixed(2)}deg)`;
     ui.arc.setAttribute("stroke-dashoffset", String(ARC_LEN * (1 - f)));
   }
 
@@ -279,25 +284,51 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  // How long to hold each phase's final number on the gauge before the
+  // next phase starts — gives the user a beat to read the result.
+  const PHASE_HOLD_MS = 1500;
+
+  // Smoothly bring the gauge needle/arc back to 0 between phases so the
+  // transition reads as "ok, on to the next thing" rather than a snap.
+  async function gaugeReset() {
+    setGauge(0);
+    await sleep(350); // matches the CSS transition + a hair
+  }
+
   async function runTest() {
     if (ui.go.classList.contains("running")) return;
     ui.go.classList.add("running");
-    ui.go.querySelector(".go-text").textContent = "···";
+    ui.gaugeWrap.classList.add("testing");
+    ui.gaugeWrap.classList.remove("showing-result");
     setGauge(0);
 
     try {
       await runPing();
+      await sleep(PHASE_HOLD_MS);   // let the user read the ping result
+      await gaugeReset();
+
       await runDownload();
+      await sleep(PHASE_HOLD_MS);   // let the user read the download result
+      await gaugeReset();
+
       await runUpload();
+      await sleep(PHASE_HOLD_MS);   // let the user read the upload result
+
+      // Final summary frame on the big readout, then fade it out.
       activeResult(null);
       setReadout("Done", ui.download.textContent, "Mbps");
       setGauge(0);
+      // Hand back to the GO button after a short "result is the headline"
+      // beat — the per-phase cards below already show the full breakdown.
+      await sleep(2200);
     } catch (e) {
       console.error(e);
       setReadout("Error", "—", "");
+      await sleep(1500);
     } finally {
       ui.go.classList.remove("running");
-      ui.go.querySelector(".go-text").textContent = "GO";
+      ui.gaugeWrap.classList.remove("testing");
+      activeResult(null);
     }
   }
 
