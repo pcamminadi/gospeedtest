@@ -378,7 +378,10 @@ func fetchInfoCmd(server string) tea.Cmd {
 
 func runTUI(ctx context.Context, cfg speedtest.Config, server string) error {
 	m := newModel(server)
-	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithAltScreen())
+	// No WithAltScreen: we want the final frame to stay visible in the
+	// user's scrollback after the program exits. Alt screen would restore
+	// the previous terminal contents and the results would be lost.
+	p := tea.NewProgram(m, tea.WithContext(ctx))
 
 	// Run the speedtest in a goroutine, funneling samples back to the program.
 	go func() {
