@@ -70,19 +70,19 @@ jobs:
       # Raw binary, uploaded alongside the archives so users can grab it
       # directly via `curl -L .../gospeedtest_v0.1.0_linux_amd64` without
       # having to extract a tarball first.
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}_bin
           path: dist/gospeedtest_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}${{ matrix.ext }}
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}
           path: dist/gospeedtest_*.tar.gz
           if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}_zip
           path: dist/gospeedtest_*.zip
