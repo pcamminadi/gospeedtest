@@ -35,8 +35,8 @@ jobs:
       GOARCH:      ${{ matrix.goarch }}
       CGO_ENABLED: 0
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: stable
           cache: true
@@ -67,13 +67,22 @@ jobs:
           fi
           rm -rf "$STAGE"
 
-      - uses: actions/upload-artifact@v4
+      # Raw binary, uploaded alongside the archives so users can grab it
+      # directly via `curl -L .../gospeedtest_v0.1.0_linux_amd64` without
+      # having to extract a tarball first.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}_bin
+          path: dist/gospeedtest_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}${{ matrix.ext }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}
           path: dist/gospeedtest_*.tar.gz
           if-no-files-found: ignore
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gospeedtest_${{ matrix.goos }}_${{ matrix.goarch }}_zip
           path: dist/gospeedtest_*.zip
@@ -84,9 +93,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
           merge-multiple: true
@@ -97,14 +106,22 @@ jobs:
       - name: compute checksums
         working-directory: artifacts
         run: |
+          # Hash both archives and the raw binaries so users can verify
+          # whichever asset they download.
           shasum -a 256 gospeedtest_* > checksums.txt
           cat checksums.txt
 
       - name: create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             artifacts/gospeedtest_*.tar.gz
             artifacts/gospeedtest_*.zip
+            artifacts/gospeedtest_${{ github.ref_name }}_linux_amd64
+            artifacts/gospeedtest_${{ github.ref_name }}_linux_arm64
+            artifacts/gospeedtest_${{ github.ref_name }}_darwin_amd64
+            artifacts/gospeedtest_${{ github.ref_name }}_darwin_arm64
+            artifacts/gospeedtest_${{ github.ref_name }}_windows_amd64.exe
+            artifacts/gospeedtest_${{ github.ref_name }}_windows_arm64.exe
             artifacts/checksums.txt
           generate_release_notes: true
