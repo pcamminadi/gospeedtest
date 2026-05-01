@@ -110,35 +110,81 @@
     }
   }
 
+  // measureOnePing performs one round-trip and returns its duration in
+  // milliseconds. We prefer the Performance Resource Timing API
+  // (responseStart - requestStart) over `performance.now()` brackets:
+  //
+  // - performance.now() around `await fetch(...)` includes DNS lookup,
+  //   the event-loop hop, promise/microtask machinery, and (on the first
+  //   request) the TCP handshake. On a localhost box that overhead can
+  //   dwarf the actual RTT — we were seeing ~7 ms in the browser vs.
+  //   ~0.3 ms in the CLI for the same loopback path.
+  // - responseStart - requestStart is what the spec defines as the time
+  //   from the browser sending the request to the first byte of the
+  //   response arriving — i.e. wire RTT, minus JS overhead.
+  //
+  // Falls back to the wall-clock measurement if the timing entry isn't
+  // available (older browsers, blocked entries, etc.).
+  async function measureOnePing(seq) {
+    // Unique URL so the Resource Timing entry is unique and we can find
+    // it. The server ignores the query string.
+    const url = `/ping?n=${seq}_${Math.random().toString(36).slice(2, 10)}`;
+    const t0 = performance.now();
+    await fetch(url, { cache: "no-store" });
+    const wallMs = performance.now() - t0;
+
+    try {
+      const fullURL = new URL(url, window.location.href).href;
+      const entries = performance.getEntriesByName(fullURL);
+      const e = entries[entries.length - 1];
+      if (e && e.responseStart > 0 && e.requestStart > 0) {
+        return e.responseStart - e.requestStart;
+      }
+    } catch (_) { /* fall through to wall-clock */ }
+    return wallMs;
+  }
+
   async function runPing() {
     activeResult("ping");
     setReadout("Ping", "0", "ms");
+
+    // Warm-up: prime the TCP/HTTP connection (and any cold caches) so the
+    // first counted sample doesn't include handshake overhead. Discarded.
+    try { await fetch("/ping", { cache: "no-store" }); } catch (_) {}
+
     const samples = [];
     for (let i = 0; i < CFG.pingSamples; i++) {
-      const t0 = performance.now();
+      let ms;
       try {
-        await fetch("/ping", { cache: "no-store" });
-      } catch (e) {
+        ms = await measureOnePing(i);
+      } catch (_) {
         continue;
       }
-      const ms = performance.now() - t0;
       samples.push(ms);
-      const last = ms.toFixed(1);
+      const last = ms.toFixed(2);
       ui.ping.textContent = last;
       setReadout("Ping", last, "ms");
-      // Gauge during ping: visualize 0..200ms inverted (lower is faster, fuller arc).
-      const f = 1 - Math.min(ms, 200) / 200;
-      setGauge(f);
+      // Gauge during ping: visualize 0..200 ms inverted (lower is faster).
+      setGauge(1 - Math.min(ms, 200) / 200);
       await sleep(50);
     }
+
+    // Don't let the resource-timing buffer accumulate ping entries forever
+    // across repeated test runs.
+    if (typeof performance.clearResourceTimings === "function") {
+      performance.clearResourceTimings();
+    }
+
     if (samples.length === 0) throw new Error("ping failed");
-    const sorted = [...samples].sort((a,b) => a - b);
+    const sorted = [...samples].sort((a, b) => a - b);
     const median = sorted[Math.floor(sorted.length / 2)];
     let jitter = 0;
-    for (let i = 1; i < samples.length; i++) jitter += Math.abs(samples[i] - samples[i-1]);
+    for (let i = 1; i < samples.length; i++) {
+      jitter += Math.abs(samples[i] - samples[i - 1]);
+    }
     jitter = samples.length > 1 ? jitter / (samples.length - 1) : 0;
-    ui.ping.textContent   = median.toFixed(1);
-    ui.jitter.textContent = jitter.toFixed(1);
+    ui.ping.textContent   = median.toFixed(2);
+    ui.jitter.textContent = jitter.toFixed(2);
     return { ping: median, jitter };
   }
 
