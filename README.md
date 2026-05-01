@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/pcamminadi/gospeedtest/actions/workflows/ci.yml/badge.svg)](https://github.com/pcamminadi/gospeedtest/actions/workflows/ci.yml)
 [![Docs](https://github.com/pcamminadi/gospeedtest/actions/workflows/docs.yml/badge.svg)](https://pcamminadi.github.io/gospeedtest/)
+[![Docker](https://github.com/pcamminadi/gospeedtest/actions/workflows/docker.yml/badge.svg)](https://github.com/pcamminadi/gospeedtest/pkgs/container/gospeedtest)
 [![Release](https://img.shields.io/github/v/release/pcamminadi/gospeedtest?sort=semver)](https://github.com/pcamminadi/gospeedtest/releases/latest)
 [![Go Reference](https://pkg.go.dev/badge/github.com/pcamminadi/gospeedtest.svg)](https://pkg.go.dev/github.com/pcamminadi/gospeedtest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pcamminadi/gospeedtest)](https://goreportcard.com/report/github.com/pcamminadi/gospeedtest)
@@ -40,11 +41,10 @@ Pre-built binaries for every release at
 go install github.com/pcamminadi/gospeedtest/cmd/gospeedtest@latest
 ```
 
-…or run the server in Docker (~ 8 MB image, scratch base):
+…or run the server with the published Docker image (~ 8 MB, multi-arch):
 
 ```sh
-docker build -t gospeedtest .
-docker run --rm -p 8080:8080 gospeedtest
+docker run --rm -p 8080:8080 ghcr.io/pcamminadi/gospeedtest:latest
 ```
 
 Then:

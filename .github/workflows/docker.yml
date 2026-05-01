@@ -1,0 +1,85 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# permissions: only what's needed.
+#   contents: read    — to checkout the repo
+#   packages: write   — to push to ghcr.io
+#   id-token: write   — for cosign / OIDC if added later
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: build & push (linux/amd64, linux/arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # Skip the login on pull_request — forks don't have package-write
+      # permissions, and we build-only there anyway.
+      - name: Log in to ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Compute tags + OCI labels:
+      #   main branch push:  ghcr.io/.../gospeedtest:edge
+      #                      ghcr.io/.../gospeedtest:main
+      #                      ghcr.io/.../gospeedtest:sha-<short>
+      #   tag push (v1.2.3): ghcr.io/.../gospeedtest:1.2.3
+      #                      ghcr.io/.../gospeedtest:1.2
+      #                      ghcr.io/.../gospeedtest:latest   (auto, highest semver)
+      #   pull_request:      ghcr.io/.../gospeedtest:pr-<n>   (built but not pushed)
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=edge,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+          # The default `latest=auto` flavor tags `:latest` only on the
+          # highest semver tag push — i.e. real releases, not every main
+          # commit. Keep that behavior.
+
+      - name: Build & push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Bake the version into the binary so `gospeedtest version`
+          # reflects the tag (or commit SHA on main builds).
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          # Reuse the GitHub Actions cache between runs — speeds up
+          # subsequent builds, especially the arm64 one which would
+          # otherwise re-emulate from scratch every time.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

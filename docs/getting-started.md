@@ -34,30 +34,50 @@ go build ./cmd/gospeedtest
 
 ### Docker
 
-The repo ships a multi-stage `Dockerfile` with a `scratch` final image
-(~ 8 MB, statically linked, zero runtime dependencies).
+Pre-built multi-arch images (`linux/amd64` + `linux/arm64`) are
+published to **GitHub Container Registry** by
+`.github/workflows/docker.yml` on every push to `main` and on every
+release tag.
+
+| Tag | What it points at |
+| --- | --- |
+| `:latest`    | the highest semver release (e.g. `v0.2.0`) |
+| `:0.2.0`     | a specific release |
+| `:0.2`       | the most recent patch release on the 0.2 line |
+| `:edge`      | the latest commit on `main` |
+| `:sha-<n>`   | a specific commit |
 
 ```sh
-# Build locally
-docker build -t gospeedtest .
+# Run the latest release
+docker run --rm -p 8080:8080 ghcr.io/pcamminadi/gospeedtest:latest
 
-# Run the server on :8080
-docker run --rm -p 8080:8080 gospeedtest
+# Pin a specific version (recommended for production)
+docker run --rm -p 8080:8080 ghcr.io/pcamminadi/gospeedtest:0.2.0
 
-# …or pin a version when one's pushed to a registry
-docker run --rm -p 8080:8080 ghcr.io/pcamminadi/gospeedtest:v0.1.0
+# Track main
+docker run --rm -p 8080:8080 ghcr.io/pcamminadi/gospeedtest:edge
 
 # Pass flags through after the image name
-docker run --rm -p 9000:9000 gospeedtest server --addr :9000
+docker run --rm -p 9000:9000 ghcr.io/pcamminadi/gospeedtest:latest \
+  server --addr :9000 --trust-proxy-headers
 
 # Run the CLI in a one-off container
-docker run --rm gospeedtest cli --server http://host.docker.internal:8080 --json
+docker run --rm ghcr.io/pcamminadi/gospeedtest:latest \
+  cli --server http://host.docker.internal:8080 --json
 ```
 
-The image bundles `ca-certificates` so the server's `/api/info`
-outbound HTTPS lookup to ipinfo.io can verify the certificate; the
-binary itself is built with `CGO_ENABLED=0` and the same
-`-trimpath -ldflags "-s -w"` as the release tarballs.
+…or build it yourself from a checkout:
+
+```sh
+docker build -t gospeedtest .
+docker run --rm -p 8080:8080 gospeedtest
+```
+
+The image is **~8 MB** with a `scratch` final stage; it bundles
+`ca-certificates` so the server's `/api/info` outbound HTTPS lookup
+to ipinfo.io can verify the certificate. The binary itself is built
+with `CGO_ENABLED=0` and the same `-trimpath -ldflags "-s -w"` as the
+release tarballs — statically linked, no runtime dependencies.
 
 ## Quick start
 
