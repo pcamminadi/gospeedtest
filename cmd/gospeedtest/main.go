@@ -66,8 +66,10 @@ flags (cli — also the defaults when no subcommand is given):
   --streams        parallel HTTP streams (default 4)
 
 flags (server):
-  --addr           listen address (default ":8080")
-  --ipinfo-token   optional ipinfo.io token for richer ISP data
+  --addr                  listen address (default ":8080")
+  --ipinfo-token          optional ipinfo.io token for richer ISP data
+  --trust-proxy-headers   honor X-Forwarded-For / X-Real-IP (off by default;
+                          only safe behind a sanitizing reverse proxy)
 `, version())
 }
 
@@ -75,9 +77,16 @@ func runServer(args []string) {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	addr := fs.String("addr", ":8080", "listen address")
 	token := fs.String("ipinfo-token", "", "optional ipinfo.io token")
+	trustProxy := fs.Bool("trust-proxy-headers", false,
+		"honor X-Forwarded-For / X-Real-IP for client IP "+
+			"(only safe behind a reverse proxy that sanitizes them)")
 	_ = fs.Parse(args)
 
-	srv := server.New(server.Config{Addr: *addr, IPInfoToken: *token})
+	srv := server.New(server.Config{
+		Addr:              *addr,
+		IPInfoToken:       *token,
+		TrustProxyHeaders: *trustProxy,
+	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -87,3 +87,27 @@ func TestFmtNum(t *testing.T) {
 		t.Errorf("fmtNum(12.34) = %q, want %q", got, "12.34")
 	}
 }
+
+func TestSanitizeTUIString(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain ASCII", "Acme Internet AS64500", "Acme Internet AS64500"},
+		{"unicode preserved", "München, Bayern", "München, Bayern"},
+		{"strips ESC", "\x1b[31mRED\x1b[0m", "[31mRED[0m"},
+		{"strips OSC-8", "\x1b]8;;file:///etc/passwd\x07benign\x1b]8;;\x07", "]8;;file:///etc/passwdbenign]8;;"},
+		{"strips DEL", "abc\x7fdef", "abcdef"},
+		{"strips tabs and newlines", "a\tb\nc\r", "abc"},
+		{"empty string", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeTUIString(tc.in)
+			if got != tc.want {
+				t.Errorf("sanitizeTUIString(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

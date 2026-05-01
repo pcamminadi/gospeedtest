@@ -11,7 +11,46 @@ import (
 	"testing"
 )
 
-func TestClientIP(t *testing.T) {
+func TestClientIPDefaultDoesNotTrustProxyHeaders(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers map[string]string
+		remote  string
+		want    string
+	}{
+		{
+			name:   "RemoteAddr strips port",
+			remote: "203.0.113.7:54321",
+			want:   "203.0.113.7",
+		},
+		{
+			name:    "X-Real-IP is ignored",
+			headers: map[string]string{"X-Real-IP": "198.51.100.4"},
+			remote:  "10.0.0.1:1",
+			want:    "10.0.0.1",
+		},
+		{
+			name:    "X-Forwarded-For is ignored",
+			headers: map[string]string{"X-Forwarded-For": "203.0.113.5"},
+			remote:  "10.0.0.99:1",
+			want:    "10.0.0.99",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/api/info", nil)
+			r.RemoteAddr = tc.remote
+			for k, v := range tc.headers {
+				r.Header.Set(k, v)
+			}
+			if got := clientIP(r, false); got != tc.want {
+				t.Errorf("clientIP(trust=false) = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestClientIPTrustProxyHeaders(t *testing.T) {
 	tests := []struct {
 		name    string
 		headers map[string]string
@@ -49,8 +88,8 @@ func TestClientIP(t *testing.T) {
 			for k, v := range tc.headers {
 				r.Header.Set(k, v)
 			}
-			if got := clientIP(r); got != tc.want {
-				t.Errorf("clientIP = %q, want %q", got, tc.want)
+			if got := clientIP(r, true); got != tc.want {
+				t.Errorf("clientIP(trust=true) = %q, want %q", got, tc.want)
 			}
 		})
 	}

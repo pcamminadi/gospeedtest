@@ -24,6 +24,16 @@ type Config struct {
 	MaxUploadMiB   int64         // safety cap, default 1024
 	ReadTimeout    time.Duration // per request, default 60s — uploads can be large
 	IPInfoToken    string        // optional ipinfo.io token for richer ISP data
+
+	// TrustProxyHeaders, when true, makes the server honor
+	// X-Forwarded-For / X-Real-IP for client-IP determination. OFF by
+	// default to prevent header-spoofing attacks: any direct caller can
+	// otherwise force /api/info to issue an outbound ipinfo.io lookup
+	// for an IP of their choosing and read the result, draining the
+	// operator's quota and acting as an SSRF-style oracle. Only enable
+	// this when running behind a reverse proxy that *strips and re-sets*
+	// these headers itself.
+	TrustProxyHeaders bool
 }
 
 func (c *Config) defaults() {
@@ -59,9 +69,18 @@ func New(cfg Config) *http.Server {
 	mux.Handle("/", web.FileServer())
 
 	return &http.Server{
-		Addr:        cfg.Addr,
-		Handler:     withCORSAndNoCache(mux),
-		ReadTimeout: cfg.ReadTimeout,
+		Addr:    cfg.Addr,
+		Handler: withCORSAndNoCache(mux),
+		// ReadHeaderTimeout caps the time we'll wait for request headers.
+		// Without this, slowloris-style clients can dribble headers for
+		// up to ReadTimeout and pin a goroutine + fd per connection. 5s
+		// is plenty for any legitimate client; the body still has the
+		// full ReadTimeout afterwards.
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       cfg.ReadTimeout,
+		// IdleTimeout bounds keep-alive connections so an idle TCP
+		// session doesn't hold a goroutine indefinitely.
+		IdleTimeout: 60 * time.Second,
 		// No WriteTimeout — long downloads must not be cut off mid-stream.
 	}
 }
@@ -132,7 +151,7 @@ type InfoResponse struct {
 
 func handleInfo(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
+		ip := clientIP(r, cfg.TrustProxyHeaders)
 		host, _ := os.Hostname()
 		resp := InfoResponse{
 			ClientIP:   ip,
@@ -151,18 +170,23 @@ func handleInfo(cfg Config) http.HandlerFunc {
 	}
 }
 
-// clientIP returns the most likely real client IP, honoring the standard
-// proxy headers if present.
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// First entry is the original client.
-		if i := strings.IndexByte(xff, ','); i > 0 {
-			return strings.TrimSpace(xff[:i])
+// clientIP returns the most likely real client IP. When trustProxyHeaders
+// is true, X-Forwarded-For (first entry) or X-Real-IP take precedence —
+// only safe when the server sits behind a proxy that strips/re-sets those
+// headers itself. Otherwise we fall back to the TCP peer address, which
+// is the only thing a malicious client cannot forge.
+func clientIP(r *http.Request, trustProxyHeaders bool) string {
+	if trustProxyHeaders {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// First entry is the original client.
+			if i := strings.IndexByte(xff, ','); i > 0 {
+				return strings.TrimSpace(xff[:i])
+			}
+			return strings.TrimSpace(xff)
 		}
-		return strings.TrimSpace(xff)
-	}
-	if xr := r.Header.Get("X-Real-IP"); xr != "" {
-		return strings.TrimSpace(xr)
+		if xr := r.Header.Get("X-Real-IP"); xr != "" {
+			return strings.TrimSpace(xr)
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

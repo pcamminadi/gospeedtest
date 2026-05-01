@@ -364,6 +364,17 @@ func fetchInfoCmd(server string) tea.Cmd {
 		if err := json.NewDecoder(resp.Body).Decode(&i); err != nil {
 			return infoMsg{}
 		}
+		// The server we're talking to may not be ours — `--server` accepts
+		// arbitrary URLs. Strip control bytes (and DEL) from every string
+		// before they reach the TUI: lipgloss does not sanitize, and a
+		// hostile peer could otherwise inject ANSI escapes into the user's
+		// terminal (color manipulation, OSC-8 hyperlinks, etc.).
+		i.ClientIP = sanitizeTUIString(i.ClientIP)
+		i.ISP = sanitizeTUIString(i.ISP)
+		i.City = sanitizeTUIString(i.City)
+		i.Region = sanitizeTUIString(i.Region)
+		i.Country = sanitizeTUIString(i.Country)
+		i.ServerHost = sanitizeTUIString(i.ServerHost)
 		loc := strings.Trim(strings.Join([]string{i.City, i.Region, i.Country}, ", "), ", ")
 		return infoMsg{
 			clientIP:   i.ClientIP,
@@ -372,6 +383,19 @@ func fetchInfoCmd(server string) tea.Cmd {
 			serverHost: i.ServerHost,
 		}
 	}
+}
+
+// sanitizeTUIString drops control bytes (anything below U+0020 plus DEL)
+// from a string before it's rendered to the terminal. ANSI escape
+// sequences begin with ESC (0x1B), so removing the entire C0 + DEL range
+// is sufficient to neutralize them.
+func sanitizeTUIString(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // ---------- entry ----------
